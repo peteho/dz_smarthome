@@ -154,7 +154,7 @@ class AlexaLockController(AlexaInterface):
         return 'Alexa.LockController'
 
     def propertiesSupported(self):
-        return [{'name': 'lockState'}]
+        return [{'name': 'lockState'}, {'name': 'inverted'}]
 
 @INTERFACES.register('Alexa.SceneController')
 class AlexaSceneController(AlexaInterface):
@@ -507,6 +507,11 @@ class Alexa(object):
     class LockController(AlexaSmartHomeCall):
 
         def Lock(self, request):
+            endpoint = self.handler.getEndpoint(request)
+            if endpoint.getProperty('inverted'):
+                endpoint.unlock()
+            else:
+                endpoint.lock()
             # Alexa expects a lockState in the response
             properties = [{
                 'name': 'lockState',
@@ -516,10 +521,19 @@ class Alexa(object):
             _LOGGER.debug("Request %s/%s", request[API_HEADER]['namespace'], request[API_HEADER]['name'])
             return api_message(request, context={'properties': properties})
 
-        # Not supported by Alexa ...
         def Unlock(self, request):
+            endpoint = self.handler.getEndpoint(request)
+            if endpoint.getProperty('inverted'):
+                endpoint.lock()
+            else:
+                endpoint.unlock()
+            properties = [{
+                'name': 'lockState',
+                'namespace': 'Alexa.LockController',
+                'value': 'UNLOCKED'
+            }]
             _LOGGER.debug("Request %s/%s", request[API_HEADER]['namespace'], request[API_HEADER]['name'])
-            return api_message(request)
+            return api_message(request, context={'properties': properties})
 
     class InputController(AlexaSmartHomeCall):
 
