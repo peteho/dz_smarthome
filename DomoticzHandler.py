@@ -32,11 +32,21 @@ class DomoticzEndpoint(AlexaEndpoint):
             else:
                 return 'OFF'
         elif name == 'lockState':
-            if device['Status'] == 'On':
-                return 'LOCKED'
-            else:
+            if device['SwitchTypeVal'] == 20:
+                if device['Status'] == 'Locked':
+                    return 'LOCKED'
+                else:
+                    return 'UNLOCKED'
+            elif device['Status'] == 'Locked':
                 return 'UNLOCKED'
+            else:
+                return 'LOCKED'
             return 'JAMMED'
+        elif name == 'inverted':
+            if device['SwitchTypeVal'] == 20:
+                return True
+            else:
+                return False
         elif name == 'brightness':
             level = device['Level']
             maxLevel = device['MaxDimLevel']
@@ -158,7 +168,14 @@ class RFYAlexaEndpoint(OnOffAlexaEndpoint):
 class LockableAlexaEndpoint(DomoticzEndpoint):
     def __init__(self, endpointId, friendlyName="", description="", manufacturerName=""):
         super().__init__(endpointId, friendlyName, description, manufacturerName)
-        self.addCapability(AlexaLockController(self, 'Alexa.LockController',[{'name': 'lockState'}]))              
+        self.addCapability(AlexaLockController(self, 'Alexa.LockController',[{'name': 'lockState'}]))
+        self.addCapability(AlexaLockController(self, 'Alexa.LockController',[{'name': 'inverted'}]))
+
+    def lock(self):
+        self.handler.setSwitchSecure(self._endpointId, 'On')
+
+    def unlock(self):
+        self.handler.setSwitchSecure(self._endpointId, 'Off')
 
 @ENDPOINT_ADAPTERS.register('Lock')
 class LockAlexaEndpoint(LockableAlexaEndpoint):
@@ -232,11 +249,13 @@ class Domoticz(object):
         self.includeScenesGroups = False
         self.prefixName = None
         self.config = None
+        self.passcode = None
 
     def configure(self, config):
         self.includeScenesGroups = config.includeScenesGroups
         self.planID = config.planID
         self.prefixName = config.prefixName
+        self.passcode = config.passcode
         self.config = config
 
     def api(self, query):
@@ -262,6 +281,8 @@ class Domoticz(object):
             endpoint.addCapability(AlexaColorTemperatureController(endpoint, 'Alexa.ColorTemperatureController'))
         elif className == 'Blind' or className == 'RFY':
             endpoint.addCapability(AlexaPercentageController(endpoint, 'Alexa.PercentageController',[{'name': 'percentage'}]))
+        elif className == 'Lock':
+            endpoint.addCapability(AlexaLockController(endpoint, 'Alexa.LockController',[{'name': 'inverted'}]))
         cookies = request['endpoint']['cookie']
         if cookies is not None:
             endpoint.addCookie(cookies)
@@ -276,11 +297,12 @@ class Domoticz(object):
         devices= response['result']
         for device in devices:
             endpoint = None
-
-            if (device['PlanID'] == "0" or device['PlanID'] == ""): continue
+            
+            if device['PlanID'] == "": continue
+            #if (device['PlanID'] == "0" or device['PlanID'] == ""): continue
             if (self.planID >= 0 and (not (self.planID in device['PlanIDs']))): continue
 
-            devType = device['Type']
+            devType = device['Type']            
 
             friendlyName = device['Name']
             # philchillbill note
@@ -333,8 +355,13 @@ class Domoticz(object):
                     endpoint = ThermostatAlexaEndpoint("SelectorThermostat-"+endpointId, friendlyName, description, manufacturerName)
                     endpoint.addDisplayCategories("THERMOSTAT")
                 elif (switchType.startswith('Door')):
-                    endpoint = LockAlexaEndpoint("Lock-"+endpointId, friendlyName, description, manufacturerName)
-                    endpoint.addDisplayCategories("SWITCH")
+                    # Val 19 = Door Lock, Val = 20, Door Lock Inverted
+                    if device['SwitchTypeVal'] == 20:
+                        endpoint = LockAlexaEndpoint("Lock-"+endpointId, friendlyName, description, "LockInverted-"+manufacturerName)
+                    else:
+                        endpoint = LockAlexaEndpoint("Lock-"+endpointId, friendlyName, description, "Lock-"+manufacturerName)
+                    endpoint.addCapability(AlexaLockController(self, 'Alexa.LockController',[{'name': 'inverted'}]))
+                    endpoint.addDisplayCategories("SMARTLOCK")
                 elif (switchType.startswith('Contact') or switchType.startswith('Motion Sensor')):
                     endpoint = ContactAlexaEndpoint("Contact-"+endpointId, friendlyName, description, manufacturerName)
                     endpoint.addDisplayCategories("CONTACT_SENSOR")
@@ -361,8 +388,13 @@ class Domoticz(object):
                     endpoint.addCapability(AlexaPercentageController(self, 'Alexa.PercentageController',[{'name': 'percentage'}]))
 
             elif (devType.startswith('Lock')):
-                endpoint = LockAlexaEndpoint("Lock-"+endpointId, friendlyName, description, manufacturerName)
-                endpoint.addDisplayCategories("SWITCH")
+                # Val 19 = Door Lock, Val = 20, Door Lock Inverted
+                if device['SwitchTypeVal'] == 20:
+                    endpoint = LockAlexaEndpoint("Lock-"+endpointId, friendlyName, description, "LockInverted-"+manufacturerName)
+                else:
+                    endpoint = LockAlexaEndpoint("Lock-"+endpointId, friendlyName, description, "Lock-"+manufacturerName)
+                endpoint.addCapability(AlexaLockController(self, 'Alexa.LockController',[{'name': 'inverted'}]))
+                endpoint.addDisplayCategories("SMARTLOCK")
 
             elif (devType.startswith('Contact')):
                 endpoint = ContactAlexaEndpoint("Contact-"+endpointId, friendlyName, description, manufacturerName)
@@ -454,6 +486,9 @@ class Domoticz(object):
 
     def setSwitch(self, idx, value):
         self.api('type=command&param=switchlight&idx=%s&switchcmd=%s'%(idx,value))
+
+    def setSwitchSecure(self, idx, value):
+        self.api('type=command&param=switchlight&idx=%s&switchcmd=%s&passcode=%s'%(idx,value,self.passcode))
 
     def setSceneSwitch(self, idx, value):
         self.api('type=command&param=switchscene&idx=%s&switchcmd=%s'%(idx,value))
