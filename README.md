@@ -2,7 +2,7 @@
 
 ## Presentation
 
-Very first version of this skill.
+Forked from rimram31. Door Lock support added.
 
 This skill is inspired from madgeni skill [madgeni alexa domo skill](https://github.com/madgeni/alexa_domo) and also get some code skeleton from [Home Assistant Alexa code](https://github.com/home-assistant/home-assistant)
 
@@ -15,7 +15,7 @@ You must have or create an Amazon Developer Account and an Amazon Web Service ac
 Create a Smart Home skill in Amazon Devleoper Account with an associated Lambda in your Amazon Web Service account
 
 ```sh
-git clone git@github.com:rimram31/dz_smarthome.git
+git clone git@github.com:peteho/dz_smarthome.git
 cd dz_smartome
 ```
 
