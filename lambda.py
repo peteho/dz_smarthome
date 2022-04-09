@@ -22,6 +22,7 @@ class Configuration(object):
         opts['includeScenesGroups'] = self.get(['includeScenesGroups'], default=False)
         opts['planID'] = self.get(['planID'], default=None)
         opts['prefixName'] = self.get(['prefixName'], default=None)
+        opts['passcode'] = self.get(['passcode'], default=None)
         opts['debug'] = self.get(['debug'], default=False)
         self.opts = opts
 
@@ -37,7 +38,7 @@ class Configuration(object):
     def dump(self):
         return json.dumps(self.opts, indent=2, separators=(',', ': '))
 
-def event_handler(request, context):
+def lambda_handler(request, context):
     config = Configuration('configdz.json')
     if config.debug:
         logger.setLevel(logging.DEBUG)
